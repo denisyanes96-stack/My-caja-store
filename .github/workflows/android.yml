@@ -1,4 +1,4 @@
-name: Build APK Android 13
+name: Build APK Java 11 Compatible
 on: [push, workflow_dispatch]
 
 jobs:
@@ -13,12 +13,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      # FORZAMOS JAVA 17 (Vital para evitar el error de la imagen 116)
-      - name: Set up Java 17
+      # Dejamos que use Java 11 por defecto como quiere el servidor
+      - name: Set up Java 11
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '11'
 
       - name: Install System Dependencies
         run: |
@@ -35,18 +35,15 @@ jobs:
 
       - name: Build with Buildozer
         run: |
-          # BORRAMOS TODO rastro de las APIs anteriores para evitar conflictos
+          # Limpiamos todo rastro de los intentos con API 33/34
           rm -rf .buildozer/
-          # Ejecutamos la compilación
           yes | buildozer android debug
         env:
           BUILDOZER_ALLOW_ORG_KIVY_ANDROID_PYTHONACTIVITY: 1
-          # Obligamos a Buildozer a mirar la carpeta de Java 17
-          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MobileStore-Android13
+          name: MobileStore-Java11-APK
           path: bin/*.apk
           
