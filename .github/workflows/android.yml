@@ -1,50 +1,139 @@
-name: Compilar APK Your Mobile Store
-on: [push]
+import os, json, datetime, traceback
+from fpdf import FPDF
+from kivy.utils import platform 
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
+from kivy.uix.textinput import TextInput
+from kivy.metrics import dp
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
+def get_paths():
+    path = App.get_running_app().user_data_dir if platform == 'android' else "YOURMOBILE_DATA"
+    if not os.path.exists(path): os.makedirs(path, exist_ok=True)
+    return {"base": path, "staff": os.path.join(path, "staff.txt"), "temp": os.path.join(path, "temp.json")}
 
-    steps:
-      - uses: actions/checkout@v4
+class ReportePDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 14)
+        self.cell(0, 10, 'YOUR MOBILE STORE - REPORT', 0, 1, 'C')
+        self.ln(5)
 
-      - name: Configurar Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+class MenuPrincipal(Screen):
+    def on_pre_enter(self):
+        self.lbl.text = f"Records: {len(App.get_running_app().products)}"
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        l = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(5))
+        l.add_widget(Label(text="YOUR MOBILE STORE", font_size='22sp', bold=True, size_hint_y=None, height=dp(50)))
+        scroll = ScrollView()
+        cont = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(5))
+        cont.bind(minimum_height=cont.setter('height'))
+        
+        # Todas las categorías rectificadas
+        cats = [("--- INCOMES ---", [("SALE", "PRODUCT"), ("SERVICE", "SERVICE")]),
+                ("--- INVESTMENTS ---", [("INV SAN JUAN", "INV_SJ"), ("INV TOBAGO", "INV_TB"), ("INV ARANGUEZ", "INV_AR")]),
+                ("--- OUTFLOWS ---", [("SON", "SON"), ("VOUCHER", "VOUCH"), ("RENT", "RENT"), ("WAGES", "WAGES")])]
+        
+        for t, items in cats:
+            cont.add_widget(Label(text=t, size_hint_y=None, height=dp(30), color=(0.5,0.5,0.5,1)))
+            for txt, c in items:
+                btn = Button(text=txt, size_hint_y=None, height=dp(48), background_color=(0.1, 0.5, 0.4, 1))
+                btn.bind(on_release=lambda x, cat=c: self.go(cat))
+                cont.add_widget(btn)
+        
+        btn_s = Button(text="STAFF MGMT", size_hint_y=None, height=dp(50), background_color=(0.1, 0.4, 0.6, 1))
+        btn_s.bind(on_release=lambda x: setattr(self.manager, 'current', 'staff'))
+        cont.add_widget(btn_s)
+        scroll.add_widget(cont); l.add_widget(scroll)
+        
+        btn_rep = Button(text="SAVE & SHARE WHATSAPP", size_hint_y=None, height=dp(60), background_color=(0.1, 0.6, 0.2, 1), bold=True)
+        btn_rep.bind(on_press=lambda x: App.get_running_app().generate())
+        self.lbl = Label(text="Records: 0", size_hint_y=None, height=dp(30))
+        l.add_widget(btn_rep); l.add_widget(self.lbl); self.add_widget(l)
+    def go(self, c):
+        self.manager.get_screen('input').category = c
+        self.manager.current = 'input'
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+class InputScreen(Screen):
+    category = ""; fields = {}
+    def on_pre_enter(self):
+        self.cont.clear_widgets(); self.fields = {}
+        if self.category == "WAGES": self.add_f('n', "Worker:"); self.add_f('a', "Amt:")
+        elif "INV_" in self.category: self.add_f('a', "Amt:"); self.add_f('t', "Taxi:")
+        elif self.category == "RENT": self.add_f('ar', "Aranguez:"); self.add_f('sj', "San Juan:"); self.add_f('hm', "Home:")
+        elif self.category in ["SON", "VOUCH"]: self.add_f('a', "Amt:")
+        else: self.add_f('i', "Item:"); self.add_f('q', "Qty:"); self.add_f('p', "Sale:"); self.add_f('c', "Cost:"); self.add_f('t', "Taxi:")
 
-      - name: Instalar Dependencias
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential git zip unzip zlib1g-dev libncurses5 libstdc++6 libtinfo5 libffi-dev libssl-dev libltdl-dev autoconf libtool
-          pip install --upgrade pip
-          pip install Cython==0.29.33 buildozer
+    def add_f(self, k, l):
+        self.cont.add_widget(Label(text=l, size_hint_y=None, height=dp(20)))
+        ti = TextInput(multiline=False, size_hint_y=None, height=dp(40))
+        self.fields[k] = ti; self.cont.add_widget(ti)
 
-      - name: Instalar dependencias de sistema para lxml
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxml2-dev libxslt-dev python3-dev
+    def save(self, _):
+        app = App.get_running_app(); f = self.fields
+        def v(k):
+            try: return float(f[k].text) if f[k].text else 0.0
+            except: return 0.0
+        
+        if self.category == "WAGES":
+            app.products.append({"d": f"WAGE: {f['n'].text}", "q": 1, "s": 0, "c": v('a'), "t": 0, "n": -v('a')})
+        elif "INV_" in self.category:
+            app.products.append({"d": self.category, "q": 1, "s": 0, "c": v('a'), "t": v('t'), "n": -(v('a')+v('t'))})
+        elif self.category == "RENT":
+            for k, n in [('ar', "R_AR"), ('sj', "R_SJ"), ('hm', "R_HM")]:
+                val = v(k)
+                if val > 0: app.products.append({"d": n, "q": 1, "s": 0, "c": val, "t": 0, "n": -val})
+        else:
+            q, p, c, t = int(v('q') or 1), v('p'), v('c'), v('t')
+            app.products.append({"d": f['i'].text, "q": q, "s": p, "c": c, "t": t, "n": (p-c-t)})
+        
+        app.save_temp(); self.manager.current = 'menu'
 
-      - name: Fabricar APK
-        run: |
-          export PATH=$PATH:$HOME/.local/bin
-          buildozer android debug
-          
-      - name: Fabricar APK
-        run: |
-          export PATH=$PATH:$HOME/.local/bin
-          buildozer android debug
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        l = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10))
+        self.cont = BoxLayout(orientation='vertical', spacing=dp(5)); l.add_widget(self.cont)
+        btn = Button(text="ADD", size_hint_y=None, height=dp(50)); btn.bind(on_press=self.save); l.add_widget(btn)
+        self.add_widget(l)
 
-      - name: Subir APK
-        uses: actions/upload-artifact@v4
-        with:
-      
-         name: YourMobileStore-APK
-         path: bin/*.apk
-          
+class StaffScreen(Screen):
+    def on_pre_enter(self): self.load()
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        l = BoxLayout(orientation='vertical', padding=dp(20))
+        self.ti = TextInput(size_hint_y=None, height=45); l.add_widget(self.ti)
+        b = Button(text="ADD STAFF", size_hint_y=None, height=45); b.bind(on_press=self.add); l.add_widget(b)
+        self.box = BoxLayout(orientation='vertical', size_hint_y=None); self.box.bind(minimum_height=self.box.setter('height'))
+        s = ScrollView(); s.add_widget(self.box); l.add_widget(s)
+        bk = Button(text="BACK", size_hint_y=None, height=45); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'menu')); l.add_widget(bk)
+        self.add_widget(l)
+    def load(self):
+        self.box.clear_widgets()
+        p = get_paths()
+        if os.path.exists(p['staff']):
+            with open(p['staff'], 'r') as f:
+                for line in f: self.box.add_widget(Label(text=line.strip(), size_hint_y=None, height=40))
+    def add(self, _):
+        if self.ti.text:
+            with open(get_paths()['staff'], 'a') as f: f.write(self.ti.text.upper() + "\n")
+            self.ti.text = ""; self.load()
+
+class MobileStoreApp(App):
+    products = []
+    def build(self):
+        self.paths = get_paths(); self.load_temp()
+        sm = ScreenManager(transition=FadeTransition())
+        sm.add_widget(MenuPrincipal(name='menu')); sm.add_widget(InputScreen(name='input')); sm.add_widget(StaffScreen(name='staff'))
+        return sm
+    def load_temp(self):
+        if os.path.exists(self.paths['temp']):
+            with open(self.paths['temp'], 'r') as f: self.products = json.load(f)
+    def save_temp(self):
+        with open(self.paths['temp'], 'w') as f: json.dump(self.products, f)
+    def generate(self):
+        if not self.products: return
+        pdf = ReportePDF(); pdf.add_page(); pdf.set_font
+        
