@@ -26,6 +26,11 @@ jobs:
           pip install --upgrade pip
           pip install Cython==0.29.33 buildozer
 
+          - name: Install dependencies for lxml
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y libxml2-dev libxslt-dev python3-dev
+
       - name: Fabricar APK
         run: |
           export PATH=$PATH:$HOME/.local/bin
