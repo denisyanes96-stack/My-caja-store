@@ -19,7 +19,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
 # (list) Application requirements
-requirements = python3,kivy
+requirements = python3,kivy,python-docx,lxml
 
 # (str) Icon of the application
 icon.filename = icon.png
@@ -61,6 +61,9 @@ android.allow_backup = True
 
 # --- FIN DEL ARREGLO ---
 
+# (list) Permissions
+android.permissions = WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
+
 # (str) The format used to package the app for debug mode
 android.debug_artifact = apk
 
@@ -78,3 +81,4 @@ log_level = 2
 
 # (int) Display warning if buildozer is run as root
 warn_on_root = 1
+
