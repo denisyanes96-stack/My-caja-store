@@ -22,7 +22,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Esta lista incluye libtool-bin y m4, que son los que quitan el error de la imagen
+          # Instalamos absolutamente todo lo necesario para evitar errores de macros y rutas
           sudo apt install -y build-essential git python3-dev libffi-dev libssl-dev \
           libsqlite3-dev cmake unzip zip libtool libtool-bin autoconf automake \
           gettext autopoint pkg-config m4
@@ -35,13 +35,15 @@ jobs:
 
       - name: Build with Buildozer
         run: |
-          # Limpiamos cualquier rastro de error anterior antes de empezar
-          buildozer android clean
+          # ELIMINAMOS cualquier rastro de compilaciones anteriores para evitar el FileNotFoundError
+          rm -rf .buildozer/
+          # Iniciamos la compilación desde cero
           yes | buildozer android debug
         env:
           BUILDOZER_ALLOW_ORG_KIVY_ANDROID_PYTHONACTIVITY: 1
 
       - name: Upload APK Artifact
+        # Usamos v4 para cumplir con la nueva regla de GitHub
         uses: actions/upload-artifact@v4
         with:
           name: YourMobileStore-APK
