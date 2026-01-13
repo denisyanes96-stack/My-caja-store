@@ -13,6 +13,7 @@ jobs:
         with:
           python-version: '3.10'
 
+      # FORZAMOS JAVA 17 (Vital para evitar el error de la imagen 116)
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -22,7 +23,6 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Instalamos libtool-bin y m4 para eliminar el error de las macros definitivamente
           sudo apt install -y build-essential git python3-dev libffi-dev libssl-dev \
           libsqlite3-dev cmake unzip zip libtool libtool-bin autoconf automake \
           gettext autopoint pkg-config m4
@@ -35,15 +35,18 @@ jobs:
 
       - name: Build with Buildozer
         run: |
-          # Limpiamos rastros de la API 34 anterior
+          # BORRAMOS TODO rastro de las APIs anteriores para evitar conflictos
           rm -rf .buildozer/
+          # Ejecutamos la compilación
           yes | buildozer android debug
         env:
           BUILDOZER_ALLOW_ORG_KIVY_ANDROID_PYTHONACTIVITY: 1
+          # Obligamos a Buildozer a mirar la carpeta de Java 17
+          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MobileStore-Android13-APK
+          name: MobileStore-Android13
           path: bin/*.apk
           
