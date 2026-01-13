@@ -1,36 +1,30 @@
-name: Build Your Mobile Store APK
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+name: Build APK
+on: [push, workflow_dispatch]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      # ACTUALIZADO: v3 -> v4
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ACTUALIZADO: v4 -> v5 (Setup Python)
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # ACTUALIZADO: v3 -> v4 (Setup Java)
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install System Dependencies
+      - name: Install Critical Dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential git python3-dev libffi-dev libssl-dev libsqlite3-dev cmake unzip zip
+          # Añadimos libtool, gettext y autoconf que causaron el error en tu imagen
+          sudo apt install -y build-essential git python3-dev libffi-dev libssl-dev \
+          libsqlite3-dev cmake unzip zip libtool autoconf gettext
 
       - name: Install Buildozer and Cython
         run: |
@@ -38,11 +32,11 @@ jobs:
           pip install buildozer
           pip install cython==0.29.33
 
-      - name: Build APK with Buildozer
+      - name: Build with Buildozer
         run: yes | buildozer android debug
 
-      # REPARACIÓN DEL ERROR DE LA IMAGEN: v3 -> v4
       - name: Upload APK Artifact
+        # Corregido a v4 para solucionar el error de tu primera imagen
         uses: actions/upload-artifact@v4
         with:
           name: YourMobileStore-APK
