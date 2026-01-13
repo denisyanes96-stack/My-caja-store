@@ -22,9 +22,9 @@ jobs:
       - name: Install Critical Dependencies
         run: |
           sudo apt update
-          # Añadimos libtool, gettext y autoconf que causaron el error en tu imagen
+          # Instalamos libtool y autotools para solucionar el error de la imagen 2
           sudo apt install -y build-essential git python3-dev libffi-dev libssl-dev \
-          libsqlite3-dev cmake unzip zip libtool autoconf gettext
+          libsqlite3-dev cmake unzip zip libtool autoconf gettext autopoint pkg-config
 
       - name: Install Buildozer and Cython
         run: |
@@ -34,9 +34,11 @@ jobs:
 
       - name: Build with Buildozer
         run: yes | buildozer android debug
+        env:
+          BUILDOZER_ALLOW_ORG_KIVY_ANDROID_PYTHONACTIVITY: 1
 
       - name: Upload APK Artifact
-        # Corregido a v4 para solucionar el error de tu primera imagen
+        # ACTUALIZADO A V4: Esto soluciona el error de la imagen 1
         uses: actions/upload-artifact@v4
         with:
           name: YourMobileStore-APK
