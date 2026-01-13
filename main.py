@@ -1,9 +1,12 @@
 import os
 import json
 import datetime
+import traceback
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+# --- CORRECCIONES DE IMPORTACIÓN ---
+from kivy.utils import platform 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -16,18 +19,19 @@ from kivy.core.window import Window
 
 # --- RUTAS DE ALMACENAMIENTO CORREGIDAS ---
 if platform == 'android':
-    from android.storage import primary_external_storage_path
-    # Esto crea la carpeta en la zona de Descargas permitida por Android
-    base_dir = primary_external_storage_path()
-    SAVE_PATH = os.path.join(base_dir, "Download", "YOURMOBILE_CAJA")
+    try:
+        from android.storage import primary_external_storage_path
+        base_dir = primary_external_storage_path()
+        SAVE_PATH = os.path.join(base_dir, "Download", "YOURMOBILE_CAJA")
+    except:
+        SAVE_PATH = "/sdcard/Download/YOURMOBILE_CAJA"
 else:
-    # Si lo pruebas en PC, se guardará en una carpeta local
     SAVE_PATH = "YOURMOBILE_CAJA"
 
 STAFF_FILE = os.path.join(SAVE_PATH, "staff_list.txt")
 TEMP_FILE = os.path.join(SAVE_PATH, "daily_temp_cache.json")
+LOG_FILE = os.path.join(SAVE_PATH, "ERROR_LOG_YOURMOBILE.txt")
 
-# Intentar crear la carpeta de forma segura
 try:
     if not os.path.exists(SAVE_PATH):
         os.makedirs(SAVE_PATH, exist_ok=True)
@@ -220,19 +224,31 @@ class MobileStoreApp(App):
                 with open(TEMP_FILE, "r") as f: self.products = json.load(f)
             except: self.products = []
     def save_temporary_data(self):
-        with open(TEMP_FILE, "w") as f: json.dump(self.products, f)
+        try:
+            with open(TEMP_FILE, "w") as f: json.dump(self.products, f)
+        except Exception as e:
+            with open(LOG_FILE, "a") as log: log.write(f"Error saving temp: {e}\n")
+
     def generate_report(self):
         if not self.products: self.stop(); return
-        doc = Document(); doc.add_heading("YOUR MOBILE STORE", 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
-        now = datetime.datetime.now(); doc.add_heading(f"REPORT: {now.strftime('%m/%d/%Y %I:%M %p')}", level=1)
-        table = doc.add_table(rows=1, cols=6); table.style = 'Table Grid'
-        for i, t in enumerate(['DESC', 'QTY', 'SALE', 'COST', 'FEE', 'NET']): table.rows[0].cells[i].text = t
-        for p in self.products:
-            r = table.add_row().cells
-            r[0].text, r[1].text, r[2].text, r[3].text, r[4].text, r[5].text = str(p['name']), str(p['quantity']), f"{p['price']:.2f}", f"{p['cost']:.2f}", f"{p['transport']:.2f}", f"{p['total']:.2f}"
-        doc.save(os.path.join(SAVE_PATH, f"REPORT_{now.strftime('%Y%m%d_%H%M')}.docx"))
-        if os.path.exists(TEMP_FILE): os.remove(TEMP_FILE)
-        self.stop()
+        try:
+            doc = Document(); doc.add_heading("YOUR MOBILE STORE", 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
+            now = datetime.datetime.now(); doc.add_heading(f"REPORT: {now.strftime('%m/%d/%Y %I:%M %p')}", level=1)
+            table = doc.add_table(rows=1, cols=6); table.style = 'Table Grid'
+            for i, t in enumerate(['DESC', 'QTY', 'SALE', 'COST', 'FEE', 'NET']): table.rows[0].cells[i].text = t
+            for p in self.products:
+                r = table.add_row().cells
+                r[0].text, r[1].text, r[2].text, r[3].text, r[4].text, r[5].text = str(p['name']), str(p['quantity']), f"{p['price']:.2f}", f"{p['cost']:.2f}", f"{p['transport']:.2f}", f"{p['total']:.2f}"
+            doc.save(os.path.join(SAVE_PATH, f"REPORT_{now.strftime('%Y%m%d_%H%M')}.docx"))
+            if os.path.exists(TEMP_FILE): os.remove(TEMP_FILE)
+            self.stop()
+        except Exception as e:
+            with open(LOG_FILE, "a") as log: log.write(f"Error docx: {e}\n")
 
 if __name__ == '__main__':
-    MobileStoreApp().run()
+    try:
+        MobileStoreApp().run()
+    except Exception:
+        with open(LOG_FILE, "w") as f:
+            f.write(traceback.format_exc())
+        
