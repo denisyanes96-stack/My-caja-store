@@ -19,7 +19,6 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
 # (list) Application requirements
-# comma separated e.g. requirements = sqlite3,kivy
 requirements = python3,kivy
 
 # (str) Icon of the application
@@ -31,10 +30,12 @@ orientation = portrait
 # (bool) Indicate if the application should be fullscreen or not
 fullscreen = 0
 
-# (int) Target Android API, should be as high as possible.
+# --- ARREGLO DE VERSIONES ANDROID ---
+
+# (int) Target Android API
 android.api = 33
 
-# (int) Minimum API your APK / AAB will support.
+# (int) Minimum API your APK will support
 android.minapi = 21
 
 # (int) Android SDK version to use
@@ -43,22 +44,27 @@ android.sdk = 33
 # (str) Android NDK version to use
 android.ndk = 25b
 
-# (int) Android NDK API to use.
+# (int) Android NDK API to use
 android.ndk_api = 21
+
+# (str) Android build-tools version to use
+android.build_tools_version = 33.0.0
+
+# (bool) If True, then automatically accept SDK license
+android.accept_sdk_license = True
 
 # (list) The Android archs to build for
 android.archs = arm64-v8a
 
-# (bool) enables Android auto backup feature (Android API >=23)
+# (bool) enables Android auto backup feature
 android.allow_backup = True
 
-# (str) The format used to package the app for debug mode (apk or aar).
+# --- FIN DEL ARREGLO ---
+
+# (str) The format used to package the app for debug mode
 android.debug_artifact = apk
 
-#
 # iOS specific
-#
-
 ios.kivy_ios_url = https://github.com/kivy/kivy-ios
 ios.kivy_ios_branch = master
 ios.ios_deploy_url = https://github.com/phonegap/ios-deploy
