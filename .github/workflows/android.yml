@@ -26,7 +26,6 @@ jobs:
           pip install --upgrade pip
           pip install Cython==0.29.33 buildozer
 
-          - name: Install dependencies for lxml
       - name: Instalar dependencias de sistema para lxml
         run: |
           sudo apt-get update
@@ -45,6 +44,7 @@ jobs:
       - name: Subir APK
         uses: actions/upload-artifact@v4
         with:
-          name: YourMobileStore-APK
-          path: bin/*.apk
+      
+         name: YourMobileStore-APK
+         path: bin/*.apk
           
