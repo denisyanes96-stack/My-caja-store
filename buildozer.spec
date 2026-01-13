@@ -31,7 +31,7 @@ android.permissions = INTERNET
 
 # (int) Target Android API
 # Obligatorio para Android 15 (Redmi Note 13)
-android.api = 34
+android.api = 33
 
 # (int) Minimum API your APK will support
 android.minapi = 21
@@ -86,3 +86,4 @@ log_level = 2
 
 # (int) Display warning if buildozer is run as root (0 = off, 1 = on)
 warn_on_root = 1
+
