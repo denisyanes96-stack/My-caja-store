@@ -14,11 +14,25 @@ from kivy.uix.textinput import TextInput
 from kivy.metrics import dp
 from kivy.core.window import Window
 
-# --- RUTAS DE ALMACENAMIENTO ---
-SAVE_PATH = "/sdcard/Download/YOURMOBILE_CAJA"
+# --- RUTAS DE ALMACENAMIENTO CORREGIDAS ---
+if platform == 'android':
+    from android.storage import primary_external_storage_path
+    # Esto crea la carpeta en la zona de Descargas permitida por Android
+    base_dir = primary_external_storage_path()
+    SAVE_PATH = os.path.join(base_dir, "Download", "YOURMOBILE_CAJA")
+else:
+    # Si lo pruebas en PC, se guardará en una carpeta local
+    SAVE_PATH = "YOURMOBILE_CAJA"
+
 STAFF_FILE = os.path.join(SAVE_PATH, "staff_list.txt")
 TEMP_FILE = os.path.join(SAVE_PATH, "daily_temp_cache.json")
-os.makedirs(SAVE_PATH, exist_ok=True)
+
+# Intentar crear la carpeta de forma segura
+try:
+    if not os.path.exists(SAVE_PATH):
+        os.makedirs(SAVE_PATH, exist_ok=True)
+except Exception as e:
+    print(f"Error creando carpeta: {e}")
 
 class MenuPrincipal(Screen):
     def on_pre_enter(self):
