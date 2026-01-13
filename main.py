@@ -2,10 +2,8 @@ import os
 import json
 import datetime
 import traceback
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from fpdf import FPDF
 
-# --- CORRECCIONES DE IMPORTACIÓN ---
 from kivy.utils import platform 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -15,240 +13,247 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.textinput import TextInput
 from kivy.metrics import dp
-from kivy.core.window import Window
 
-# --- RUTAS DE ALMACENAMIENTO CORREGIDAS ---
-if platform == 'android':
-    try:
-        from android.storage import primary_external_storage_path
-        base_dir = primary_external_storage_path()
-        SAVE_PATH = os.path.join(base_dir, "Download", "YOURMOBILE_CAJA")
-    except:
-        SAVE_PATH = "/sdcard/Download/YOURMOBILE_CAJA"
-else:
-    SAVE_PATH = "YOURMOBILE_CAJA"
+# --- CONFIGURACIÓN DE RUTA INTERNA (REGLA ANDROID 15) ---
+def get_paths():
+    if platform == 'android':
+        path = App.get_running_app().user_data_dir
+    else:
+        path = "YOURMOBILE_CAJA"
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+    return {
+        "base": path,
+        "staff": os.path.join(path, "staff_list.txt"),
+        "temp": os.path.join(path, "daily_temp_cache.json"),
+        "log": os.path.join(path, "ERROR_LOG.txt")
+    }
 
-STAFF_FILE = os.path.join(SAVE_PATH, "staff_list.txt")
-TEMP_FILE = os.path.join(SAVE_PATH, "daily_temp_cache.json")
-LOG_FILE = os.path.join(SAVE_PATH, "ERROR_LOG_YOURMOBILE.txt")
+# --- PDF PROFESIONAL ---
+class ReportePDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 14)
+        self.set_text_color(30, 70, 140)
+        self.cell(0, 10, 'YOUR MOBILE STORE - DAILY FINANCIAL REPORT', 0, 1, 'C')
+        self.ln(5)
 
-try:
-    if not os.path.exists(SAVE_PATH):
-        os.makedirs(SAVE_PATH, exist_ok=True)
-except Exception as e:
-    print(f"Error creando carpeta: {e}")
-
+# --- PANTALLA PRINCIPAL ---
 class MenuPrincipal(Screen):
     def on_pre_enter(self):
-        self.lbl_info.text = f"Items in daily memory: {len(App.get_running_app().products)}"
+        self.lbl_info.text = f"Records: {len(App.get_running_app().products)}"
 
     def __init__(self, **kw):
         super().__init__(**kw)
         layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(5))
-        layout.add_widget(Label(text="YOUR MOBILE STORE", font_size='24sp', bold=True, size_hint_y=None, height=dp(50), color=(0.29, 0.56, 0.88, 1)))
+        layout.add_widget(Label(text="YOUR MOBILE STORE", font_size='22sp', bold=True, size_hint_y=None, height=dp(50), color=(0.1, 0.4, 0.7, 1)))
         
         scroll = ScrollView()
-        self.btn_container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(6))
-        self.btn_container.bind(minimum_height=self.btn_container.setter('height'))
+        container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(5))
+        container.bind(minimum_height=container.setter('height'))
 
-        # SECCIONES COMPLETAS RECTIFICADAS
-        secciones = [
-            ("--- INCOMES ---", [("[ 1 ] NEW SALE (PRODUCT)", "PRODUCT"), ("[ 2 ] REPAIR / SERVICE", "SERVICE/REPAIR")]),
-            ("--- INVESTMENTS & TAXI ---", [
-                ("[ 3 ] INVESTMENT SAN JUAN", "INVESTMENT SAN JUAN"), 
-                ("[ 4 ] INVESTMENT TOBAGO", "INVESTMENT TOBAGO"),
-                ("[ 5 ] INVESTMENT ARANGUEZ", "INVESTMENT ARANGUEZ")
+        # RECTIFICACIÓN: TODAS LAS OPCIONES DEL MENÚ
+        menu_items = [
+            ("--- INCOMES ---", [
+                ("NEW SALE", "PRODUCT"), 
+                ("REPAIR / SERVICE", "SERVICE")
+            ]),
+            ("--- INVESTMENTS ---", [
+                ("INVESTMENT SAN JUAN", "INV_SJ"), 
+                ("INVESTMENT TOBAGO", "INV_TB"), 
+                ("INVESTMENT ARANGUEZ", "INV_AR")
             ]),
             ("--- OTHER OUTFLOWS ---", [
-                ("[ 6 ] OWNER'S SON", "OWNER'S SON"), 
-                ("[ 7 ] VOUCHER", "VOUCHER"), 
-                ("[ 8 ] RENT PAYMENT", "RENT PAYMENT"), 
-                ("[ 9 ] WAGES / SALARIES", "WAGES")
+                ("OWNER'S SON", "SON"), 
+                ("VOUCHER", "VOUCHER"), 
+                ("RENT PAYMENT", "RENT"), 
+                ("WAGES / SALARIES", "WAGES")
             ]),
         ]
 
-        for titulo, botones in secciones:
-            self.btn_container.add_widget(Label(text=titulo, size_hint_y=None, height=dp(35), color=(0.4, 0.4, 0.4, 1), bold=True))
-            for texto, cat in botones:
-                btn = Button(text=texto, size_hint_y=None, height=dp(50), background_color=(0.15, 0.5, 0.3, 1), halign='left', padding=(dp(15), 0))
-                btn.bind(on_release=lambda x, c=cat: self.ir_a_flujo(c))
-                btn.text_size = (Window.width - dp(40), None)
-                self.btn_container.add_widget(btn)
+        for title, items in menu_items:
+            container.add_widget(Label(text=title, size_hint_y=None, height=dp(35), color=(0.4, 0.4, 0.4, 1), bold=True))
+            for text, cat in items:
+                b = Button(text=text, size_hint_y=None, height=dp(50), background_color=(0.15, 0.5, 0.35, 1))
+                b.bind(on_release=lambda x, c=cat: self.go_input(c))
+                container.add_widget(b)
 
-        self.btn_container.add_widget(Label(text="--- MANAGEMENT ---", size_hint_y=None, height=dp(35), color=(0.4, 0.4, 0.4, 1), bold=True))
-        btn_staff = Button(text="[ 10 ] STAFF MANAGEMENT", size_hint_y=None, height=dp(55), background_color=(0.16, 0.5, 0.72, 1), bold=True)
+        btn_staff = Button(text="[ 10 ] STAFF MANAGEMENT", size_hint_y=None, height=dp(55), background_color=(0.1, 0.4, 0.6, 1), bold=True)
         btn_staff.bind(on_release=lambda x: setattr(self.manager, 'current', 'staff'))
-        self.btn_container.add_widget(btn_staff)
+        container.add_widget(btn_staff)
 
-        scroll.add_widget(self.btn_container)
+        scroll.add_widget(container)
         layout.add_widget(scroll)
         
-        btn_save = Button(text=" SAVE REPORT AND EXIT", size_hint_y=None, height=dp(60), background_color=(0.11, 0.51, 0.28, 1), bold=True)
+        btn_save = Button(text="SAVE & SHARE REPORT", size_hint_y=None, height=dp(60), background_color=(0.1, 0.6, 0.2, 1), bold=True)
         btn_save.bind(on_press=lambda x: App.get_running_app().generate_report())
         layout.add_widget(btn_save)
 
-        self.lbl_info = Label(text="Items: 0", size_hint_y=None, height=dp(30), font_size='10sp')
+        self.lbl_info = Label(text="Records: 0", size_hint_y=None, height=dp(25), font_size='11sp')
         layout.add_widget(self.lbl_info)
         self.add_widget(layout)
 
-    def ir_a_flujo(self, cat):
+    def go_input(self, cat):
         self.manager.get_screen('input').category = cat
         self.manager.current = 'input'
 
-class StaffScreen(Screen):
-    def on_pre_enter(self): self.refresh_list()
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
-        header = BoxLayout(size_hint_y=None, height=dp(50))
-        btn_back = Button(text="‹ BACK", size_hint_x=0.2, background_color=(0.3, 0.3, 0.3, 1))
-        btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'menu'))
-        header.add_widget(btn_back); header.add_widget(Label(text="STAFF MANAGEMENT", bold=True))
-        layout.add_widget(header)
-        
-        add_box = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(5))
-        self.new_staff_input = TextInput(hint_text="Worker Name", multiline=False)
-        btn_add = Button(text="ADD", size_hint_x=0.3, background_color=(0.15, 0.68, 0.37, 1))
-        btn_add.bind(on_press=self.add_worker)
-        add_box.add_widget(self.new_staff_input); add_box.add_widget(btn_add); layout.add_widget(add_box)
-        
-        self.scroll = ScrollView(); self.list_layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(5))
-        self.list_layout.bind(minimum_height=self.list_layout.setter('height')); self.scroll.add_widget(self.list_layout); layout.add_widget(self.scroll)
-        self.add_widget(layout)
-
-    def refresh_list(self):
-        self.list_layout.clear_widgets()
-        if os.path.exists(STAFF_FILE):
-            with open(STAFF_FILE, "r") as f:
-                for line in f:
-                    name = line.strip()
-                    if name:
-                        row = BoxLayout(size_hint_y=None, height=dp(45), spacing=dp(5))
-                        row.add_widget(Label(text=name, halign='left'))
-                        btn_del = Button(text="DEL", size_hint_x=0.2, background_color=(0.75, 0.22, 0.16, 1))
-                        btn_del.bind(on_release=lambda x, n=name: self.delete_worker(n))
-                        row.add_widget(btn_del); self.list_layout.add_widget(row)
-
-    def add_worker(self, instance):
-        name = self.new_staff_input.text.strip().upper()
-        if name:
-            with open(STAFF_FILE, "a") as f: f.write(name + "\n")
-            self.new_staff_input.text = ""; self.refresh_list()
-
-    def delete_worker(self, name):
-        if os.path.exists(STAFF_FILE):
-            with open(STAFF_FILE, "r") as f: lines = f.readlines()
-            with open(STAFF_FILE, "w") as f:
-                for line in lines:
-                    if line.strip() != name: f.write(line)
-            self.refresh_list()
-
+# --- PANTALLA DE ENTRADA (LÓGICA DE SUBDIRECTORIOS RECTIFICADA) ---
 class InputScreen(Screen):
-    category = ""
-    fields = {}
-
+    category = ""; fields = {}
     def on_pre_enter(self):
-        self.layout_campos.clear_widgets(); self.fields = {}
-        self.lbl_header.text = self.category
+        self.container.clear_widgets(); self.fields = {}
+        self.title.text = f"CATEGORY: {self.category}"
+        
+        # DEFINICIÓN DE CAMPOS SEGÚN LA OPCIÓN ELEGIDA
         if self.category == "WAGES":
-            self.create_field('worker', "WORKER NAME:"); self.create_field('amt', "SALARY AMOUNT:")
-        elif "INVESTMENT" in self.category:
-            self.create_field('amt', "INVESTED AMOUNT:"); self.create_field('taxi', "TAXI COST:")
-        elif self.category == "RENT PAYMENT":
-            self.create_field('aranguez', "RENT ARANGUEZ (SHOP):")
-            self.create_field('sanjuan', "RENT SAN JUAN (SHOP):")
-            self.create_field('home', "RENT HOME (PERSONAL):")
-        elif self.category in ["OWNER'S SON", "VOUCHER"]:
-            self.create_field('amt', "AMOUNT PAID:")
-        else:
-            self.create_field('name', "ITEM NAME:"); self.create_field('qty', "QTY:")
-            self.create_field('price', "SALE PRICE:"); self.create_field('cost', "COST PRICE:"); self.create_field('taxi', "TAXI FEE:")
+            self.add_f('worker', "Worker Name:"); self.add_f('amt', "Amount Paid:")
+        elif self.category in ["INV_SJ", "INV_TB", "INV_AR"]:
+            self.add_f('amt', "Investment Amount:"); self.add_f('taxi', "Taxi Cost:")
+        elif self.category == "RENT":
+            self.add_f('ar', "Aranguez Rent:"); self.add_f('sj', "San Juan Rent:"); self.add_f('hm', "Home Rent:")
+        elif self.category in ["SON", "VOUCHER"]:
+            self.add_f('amt', "Amount:")
+        else: # PRODUCT O SERVICE
+            self.add_f('name', "Item/Service Name:"); self.add_f('qty', "Quantity:")
+            self.add_f('price', "Sale Price (Total):"); self.add_f('cost', "Cost (Total):")
+            self.add_f('taxi', "Taxi/Fee:")
 
-    def create_field(self, key, label_text):
-        self.layout_campos.add_widget(Label(text=label_text, size_hint_y=None, height=dp(25), color=(0.29, 0.56, 0.88, 1)))
+    def add_f(self, key, label):
+        self.container.add_widget(Label(text=label, size_hint_y=None, height=dp(20)))
         ti = TextInput(multiline=False, size_hint_y=None, height=dp(45))
-        self.fields[key] = ti; self.layout_campos.add_widget(ti)
+        self.fields[key] = ti; self.container.add_widget(ti)
 
-    def process_data(self, instance):
+    def save_record(self, _):
         app = App.get_running_app(); f = self.fields
-        def n(k): 
+        def v(k):
             try: return float(f[k].text) if f[k].text else 0.0
             except: return 0.0
 
+        # RECTIFICACIÓN DE CÁLCULOS POR CATEGORÍA
+        res = {"desc": "", "qty": 1, "sale": 0.0, "cost": 0.0, "taxi": 0.0, "net": 0.0}
+        
         if self.category == "WAGES":
-            amt = n('amt')
-            app.products.append({"name": f"WAGE: {f['worker'].text.upper()}", "price": 0.0, "cost": amt, "transport": 0.0, "quantity": 1, "total": -amt})
-        elif "INVESTMENT" in self.category:
-            amt, taxi = n('amt'), n('taxi')
-            app.products.append({"name": self.category, "price": 0.0, "cost": amt, "transport": 0.0, "quantity": 1, "total": -amt})
-            app.products.append({"name": f"TAXI: {self.category}", "price": 0.0, "cost": 0.0, "transport": taxi, "quantity": 1, "total": -taxi})
-        elif self.category == "RENT PAYMENT":
-            for k, key in [("ARANGUEZ (SHOP)", 'aranguez'), ("SAN JUAN (SHOP)", 'sanjuan'), ("HOME (PERSONAL)", 'home')]:
-                val = n(key)
-                if val > 0: app.products.append({"name": f"RENT: {k}", "price": 0.0, "cost": val, "transport": 0.0, "quantity": 1, "total": -val})
-        elif self.category in ["OWNER'S SON", "VOUCHER"]:
-            amt = n('amt')
-            app.products.append({"name": f"OUTFLOW: {self.category}", "price": 0.0, "cost": amt, "transport": 0.0, "quantity": 1, "total": -amt})
+            amt = v('amt')
+            res.update({"desc": f"WAGE: {f['worker'].text.upper()}", "cost": amt, "net": -amt})
+        elif "INV_" in self.category:
+            amt, taxi = v('amt'), v('taxi')
+            res.update({"desc": self.category.replace("_", " "), "cost": amt, "taxi": taxi, "net": -(amt + taxi)})
+        elif self.category == "RENT":
+            for k, n in [('ar', "RENT ARANGUEZ"), ('sj', "RENT SAN JUAN"), ('hm', "RENT HOME")]:
+                val = v(k)
+                if val > 0: app.products.append({"desc": n, "qty": 1, "sale": 0, "cost": val, "taxi": 0, "net": -val})
+            app.save_temp(); self.manager.current = 'menu'; return
+        elif self.category in ["SON", "VOUCHER"]:
+            amt = v('amt')
+            res.update({"desc": f"OUTFLOW: {self.category}", "cost": amt, "net": -amt})
         else:
-            name, qty = f['name'].text.upper() or "ITEM", int(n('qty')) or 1
-            ps, cb, tr = n('price'), n('cost'), n('taxi')
-            net = (ps * qty) - (cb * qty) - tr
-            app.products.append({"name": name if self.category != "SERVICE/REPAIR" else f"SRV: {name}", "price": ps * qty, "cost": cb * qty, "transport": tr, "quantity": qty, "total": net})
+            name = f['name'].text.upper() or "ITEM"
+            q, p, c, t = int(v('qty') or 1), v('price'), v('cost'), v('taxi')
+            res.update({"desc": name, "qty": q, "sale": p, "cost": c, "taxi": t, "net": (p - c - t)})
 
-        app.save_temporary_data(); self.manager.current = 'menu'
+        app.products.append(res); app.save_temp(); self.manager.current = 'menu'
 
     def __init__(self, **kw):
         super().__init__(**kw)
-        layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
-        header = BoxLayout(size_hint_y=None, height=dp(50))
-        btn_back = Button(text="‹ BACK", size_hint_x=0.25, background_color=(0.3, 0.3, 0.3, 1))
-        btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'menu'))
-        self.lbl_header = Label(text="", bold=True)
-        header.add_widget(btn_back); header.add_widget(self.lbl_header)
-        self.layout_campos = BoxLayout(orientation='vertical', spacing=dp(5))
-        btn_confirm = Button(text="CONFIRM RECORD", size_hint_y=None, height=dp(60), background_color=(0.15, 0.68, 0.37, 1), bold=True)
-        btn_confirm.bind(on_press=self.process_data)
-        layout.add_widget(header); layout.add_widget(self.layout_campos); layout.add_widget(BoxLayout()); layout.add_widget(btn_confirm)
-        self.add_widget(layout)
+        l = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10))
+        self.title = Label(text="", bold=True, size_hint_y=None, height=dp(40))
+        l.add_widget(self.title)
+        self.container = BoxLayout(orientation='vertical', spacing=dp(5))
+        l.add_widget(self.container)
+        btn = Button(text="SAVE RECORD", size_hint_y=None, height=dp(55), background_color=(0.1, 0.5, 0.8, 1))
+        btn.bind(on_press=self.save_record); l.add_widget(btn)
+        self.add_widget(l)
 
+# --- GESTIÓN DE STAFF ---
+class StaffScreen(Screen):
+    def on_pre_enter(self): self.load()
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        l = BoxLayout(orientation='vertical', padding=dp(20))
+        l.add_widget(Label(text="STAFF MANAGEMENT", bold=True, size_hint_y=None, height=40))
+        self.inp = TextInput(hint_text="New Name", multiline=False, size_hint_y=None, height=45)
+        l.add_widget(self.inp)
+        btn = Button(text="ADD", size_hint_y=None, height=45); btn.bind(on_press=self.add); l.add_widget(btn)
+        self.scroll = ScrollView(); self.box = BoxLayout(orientation='vertical', size_hint_y=None, spacing=5)
+        self.box.bind(minimum_height=self.box.setter('height')); self.scroll.add_widget(self.box); l.add_widget(self.scroll)
+        back = Button(text="BACK", size_hint_y=None, height=50); back.bind(on_release=lambda x: setattr(self.manager, 'current', 'menu')); l.add_widget(back)
+        self.add_widget(l)
+
+    def load(self):
+        self.box.clear_widgets(); p = get_paths()
+        if os.path.exists(p["staff"]):
+            with open(p["staff"], "r") as f:
+                for line in f:
+                    n = line.strip()
+                    if n:
+                        row = BoxLayout(size_hint_y=None, height=40)
+                        row.add_widget(Label(text=n))
+                        self.box.add_widget(row)
+
+    def add(self, _):
+        if self.inp.text:
+            with open(get_paths()["staff"], "a") as f: f.write(self.inp.text.upper() + "\n")
+            self.inp.text = ""; self.load()
+
+# --- APP PRINCIPAL ---
 class MobileStoreApp(App):
     products = []
     def build(self):
-        self.load_temporary_data()
+        self.paths = get_paths(); self.load_temp()
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(MenuPrincipal(name='menu')); sm.add_widget(InputScreen(name='input')); sm.add_widget(StaffScreen(name='staff'))
         return sm
-    def load_temporary_data(self):
-        if os.path.exists(TEMP_FILE):
+
+    def load_temp(self):
+        if os.path.exists(self.paths["temp"]):
             try:
-                with open(TEMP_FILE, "r") as f: self.products = json.load(f)
+                with open(self.paths["temp"], "r") as f: self.products = json.load(f)
             except: self.products = []
-    def save_temporary_data(self):
-        try:
-            with open(TEMP_FILE, "w") as f: json.dump(self.products, f)
-        except Exception as e:
-            with open(LOG_FILE, "a") as log: log.write(f"Error saving temp: {e}\n")
+
+    def save_temp(self):
+        with open(self.paths["temp"], "w") as f: json.dump(self.products, f)
 
     def generate_report(self):
-        if not self.products: self.stop(); return
+        if not self.products: return
         try:
-            doc = Document(); doc.add_heading("YOUR MOBILE STORE", 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
-            now = datetime.datetime.now(); doc.add_heading(f"REPORT: {now.strftime('%m/%d/%Y %I:%M %p')}", level=1)
-            table = doc.add_table(rows=1, cols=6); table.style = 'Table Grid'
-            for i, t in enumerate(['DESC', 'QTY', 'SALE', 'COST', 'FEE', 'NET']): table.rows[0].cells[i].text = t
+            pdf = ReportePDF(); pdf.add_page(); now = datetime.datetime.now()
+            pdf.set_font('Arial', 'B', 9)
+            # Encabezados de tabla
+            header = [('DESC', 65), ('QTY', 12), ('SALE', 25), ('COST', 25), ('TAXI', 25), ('NET', 28)]
+            for t, w in header: pdf.cell(w, 10, t, 1, 0, 'C')
+            pdf.ln()
+            
+            pdf.set_font('Arial', '', 8); total = 0
             for p in self.products:
-                r = table.add_row().cells
-                r[0].text, r[1].text, r[2].text, r[3].text, r[4].text, r[5].text = str(p['name']), str(p['quantity']), f"{p['price']:.2f}", f"{p['cost']:.2f}", f"{p['transport']:.2f}", f"{p['total']:.2f}"
-            doc.save(os.path.join(SAVE_PATH, f"REPORT_{now.strftime('%Y%m%d_%H%M')}.docx"))
-            if os.path.exists(TEMP_FILE): os.remove(TEMP_FILE)
-            self.stop()
-        except Exception as e:
-            with open(LOG_FILE, "a") as log: log.write(f"Error docx: {e}\n")
+                pdf.cell(65, 8, p['desc'][:35], 1)
+                pdf.cell(12, 8, str(p['qty']), 1, 0, 'C')
+                pdf.cell(25, 8, f"{p['sale']:.2f}", 1, 0, 'R')
+                pdf.cell(25, 8, f"{p['cost']:.2f}", 1, 0, 'R')
+                pdf.cell(25, 8, f"{p['taxi']:.2f}", 1, 0, 'R')
+                pdf.cell(28, 8, f"{p['net']:.2f}", 1, 0, 'R')
+                pdf.ln(); total += p['net']
+
+            pdf.ln(5); pdf.set_font('Arial', 'B', 12)
+            pdf.cell(0, 10, f"TOTAL PROFIT: {total:.2f}", 0, 1, 'R')
+            
+            f_name = f"REPORT_{now.strftime('%Y%m%d_%H%M')}.pdf"
+            full_path = os.path.join(self.paths["base"], f_name)
+            pdf.output(full_path)
+            self.share(full_path)
+            if os.path.exists(self.paths["temp"]): os.remove(self.paths["temp"])
+        except:
+            with open(self.paths["log"], "w") as f: f.write(traceback.format_exc())
+
+    def share(self, path):
+        if platform == 'android':
+            from jnius import autoclass, cast
+            activity = autoclass('org.kivy.android.PythonActivity').mActivity
+            intent = autoclass('android.content.Intent')(autoclass('android.content.Intent').ACTION_SEND)
+            intent.setType("application/pdf")
+            uri = autoclass('androidx.core.content.FileProvider').getUriForFile(activity, "com.yourmobile.store.fileprovider", autoclass('java.io.File')(path))
+            intent.putExtra(autoclass('android.content.Intent').EXTRA_STREAM, uri)
+            intent.addFlags(autoclass('android.content.Intent').ACTION_GRANT_READ_URI_PERMISSION)
+            activity.startActivity(autoclass('android.content.Intent').createChooser(intent, cast(autoclass('java.lang.String'), "Share Report")))
 
 if __name__ == '__main__':
-    try:
-        MobileStoreApp().run()
-    except Exception:
-        with open(LOG_FILE, "w") as f:
-            f.write(traceback.format_exc())
+    MobileStoreApp().run()
         
