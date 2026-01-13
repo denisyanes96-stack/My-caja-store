@@ -7,7 +7,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
 # Aquí están las librerías necesarias para el Word
-requirements = python3,kivy,python-docx,lxml
+requirements = python3,kivy,python-docx
 
 icon.filename = icon.png
 orientation = portrait
@@ -34,3 +34,4 @@ android.debug_artifact = apk
 [buildozer]
 log_level = 2
 warn_on_root = 1
+
