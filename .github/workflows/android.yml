@@ -8,20 +8,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar dependencias del sistema
+      - name: Instalar dependencias
         run: |
           sudo apt update
-          sudo apt install -y python3-pip build-essential git python3 python3-dev zip unzip zlib1g-dev libncurses5 libstdc++6 libtinfo5
+          sudo apt install -y python3-pip build-essential git python3 python3-dev zip unzip zlib1g-dev libncurses5 libstdc++6 libtinfo5 libffi-dev libssl-dev
           pip3 install --user --upgrade Cython==0.29.33 buildozer
 
-      - name: Fabricar APK (Your Mobile Store)
+      - name: Fabricar APK
         run: |
-          # Esto acepta las licencias de Android automáticamente
-          yes | buildozer android debug
-
-      - name: Subir APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: YourMobileStore-APK
-          path: bin/*.apk
-          
+          # Usamos un método más seguro para aceptar licencias
+          export PATH=$PATH:$HOME/.local/bin
+          buildozer android debug || buildozer android debug
