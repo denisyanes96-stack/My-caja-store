@@ -8,27 +8,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Limpiar espacio en servidor
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-      - name: Instalar herramientas
+      - name: Instalar Dependencias
         run: |
           sudo apt update
-          sudo apt install -y python3-pip build-essential git zip unzip zlib1g-dev libncurses5 libstdc++6 libtinfo5 libffi-dev libssl-dev
-          pip3 install --user --upgrade Cython==0.29.33 buildozer
+          sudo apt install -y build-essential git zip unzip zlib1g-dev libncurses5 libstdc++6 libtinfo5 libffi-dev libssl-dev libltdl-dev
+          pip install --upgrade pip
+          pip install Cython==0.29.33 buildozer
 
-      - name: Fabricar APK
+      - name: Fabricar APK (Modo Seguro)
         run: |
-          export PATH=$PATH:$HOME/.local/bin
-          # Usamos 'force' para asegurar que se cree el archivo
+          # Generamos el APK y listamos la carpeta bin al terminar
           buildozer android debug
-          
+          echo "Contenido de la carpeta bin:"
+          ls -R bin/
+
       - name: Subir APK
         uses: actions/upload-artifact@v4
         with:
           name: YourMobileStore-APK
-          # CAMBIO AQUÍ: Buscamos en toda la carpeta .buildozer para estar seguros
-          path: bin/
+          path: bin/*.apk
+          if-no-files-found: error
           
